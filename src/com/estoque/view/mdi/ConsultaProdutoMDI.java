@@ -7,6 +7,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.List;
 
+/**
+ * Janela interna para consulta e ações sobre os registros no formato MDI.
+ */
 public class ConsultaProdutoMDI extends JInternalFrame {
     private JTable tabela;
     private DefaultTableModel modelo;
@@ -14,12 +17,13 @@ public class ConsultaProdutoMDI extends JInternalFrame {
     private JTextField txtPesquisa;
     private JButton btnBuscar, btnAlterar, btnExcluir;
     private List<Produto> listaProdutos;
+    // Referência da área de trabalho necessária para adicionar o formulário interno ao DesktopPane
     private JDesktopPane desktopPane;
 
-    public ConsultaProdutoMDI(JDesktopPane desktopPane) {
-        super("Consulta de Produtos", true, true, true, true);
-        this.desktopPane = desktopPane;
-        setSize(700, 400);
+    public ConsultaProdutoMDI(JDesktopPane desktop) {
+        super("Consulta de Produtos - MDI", true, true, true, true);
+        this.desktopPane = desktop;
+        setSize(680, 380);
         setLayout(new BorderLayout(5, 5));
 
         JPanel topoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -34,12 +38,12 @@ public class ConsultaProdutoMDI extends JInternalFrame {
 
         modelo = new DefaultTableModel(new Object[]{"Código", "Nome", "Categoria", "Preço", "Estoque", "Situação"}, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int col) { return false; }
         };
         tabela = new JTable(modelo);
         add(new JScrollPane(tabela), BorderLayout.CENTER);
 
-        JPanel rodapePanel = new JPanel();
+        JPanel rodapePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnAlterar = new JButton("Alterar");
         btnExcluir = new JButton("Excluir");
         rodapePanel.add(btnAlterar);
@@ -55,25 +59,22 @@ public class ConsultaProdutoMDI extends JInternalFrame {
 
     public void carregarDados() {
         modelo.setRowCount(0);
-        try {
-            ProdutoDAO dao = new ProdutoDAO();
-            String filtro = cbFiltro.getSelectedItem().toString();
-            String texto = "Todos".equals(filtro) ? "" : txtPesquisa.getText();
-            listaProdutos = dao.listarPorFiltro(filtro, texto);
+        String filtro = (String) cbFiltro.getSelectedItem();
+        String termo = txtPesquisa.getText();
+        listaProdutos = new ProdutoDAO().listarPorFiltro(filtro, termo);
 
-            for (Produto p : listaProdutos) {
-                modelo.addRow(new Object[]{p.getCodigo(), p.getNome(), p.getCategoria(), p.getPreco(), p.getQuantidadeEstoque(), p.getSituacao()});
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + ex.getMessage());
+        for (Produto p : listaProdutos) {
+            modelo.addRow(new Object[]{p.getCodigo(), p.getNome(), p.getCategoria(), p.getPreco(), p.getQuantidadeEstoque(), p.getSituacao()});
         }
     }
 
     private void alterar() {
         int linha = tabela.getSelectedRow();
         if (linha >= 0) {
-            Produto selecionado = listaProdutos.get(linha);
-            FormProdutoMDI form = new FormProdutoMDI(selecionado, this::carregarDados);
+            Produto p = listaProdutos.get(linha);
+            // Passa a referência do método carregarDados (via method reference) para atualizar ao fechar
+            FormProdutoMDI form = new FormProdutoMDI(p, this::carregarDados);
+            // Anexa a janela de edição à mesma área de trabalho do MDI
             desktopPane.add(form);
             form.setVisible(true);
         } else {
@@ -84,16 +85,11 @@ public class ConsultaProdutoMDI extends JInternalFrame {
     private void excluir() {
         int linha = tabela.getSelectedRow();
         if (linha >= 0) {
-            Produto selecionado = listaProdutos.get(linha);
-            int opc = JOptionPane.showConfirmDialog(this, "Tem certeza que deseja excluir o produto " + selecionado.getNome() + "?", "Confirmação", JOptionPane.YES_NO_OPTION);
+            Produto p = listaProdutos.get(linha);
+            int opc = JOptionPane.showConfirmDialog(this, "Deseja excluir: " + p.getNome() + "?", "Confirmação", JOptionPane.YES_NO_OPTION);
             if (opc == JOptionPane.YES_OPTION) {
-                try {
-                    new ProdutoDAO().excluir(selecionado.getCodigo());
-                    JOptionPane.showMessageDialog(this, "Produto excluído com sucesso!");
-                    carregarDados();
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Erro ao excluir: " + ex.getMessage());
-                }
+                new ProdutoDAO().excluir(p.getCodigo());
+                carregarDados();
             }
         } else {
             JOptionPane.showMessageDialog(this, "Selecione um produto para excluir.");
