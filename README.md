@@ -75,16 +75,17 @@ Aplicação desktop desenvolvida em **Java Swing** com foco em Orientação a Ob
 Antes de executar com a persistência definitiva, execute o script SQL abaixo:
 
 ```sql
-CREATE DATABASE mercado_db;
-
-\c mercado_db;
+CREATE DATABASE db_estoque;
 
 CREATE TABLE produto (
     codigo SERIAL PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
-    descricao TEXT,
-    categoria VARCHAR(50) NOT NULL,
+    descricao VARCHAR(255),
+    categoria VARCHAR(50),
     preco NUMERIC(10, 2) NOT NULL,
+    quantidade INTEGER NOT NULL,
+    status VARCHAR(20) DEFAULT 'Ativo'
+);
 
 ---------
 
