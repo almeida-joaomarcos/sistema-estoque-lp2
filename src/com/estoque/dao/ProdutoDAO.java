@@ -1,73 +1,111 @@
 package com.estoque.dao;
 
+import com.estoque.conexao.ConexaoPostgres;
 import com.estoque.model.Produto;
-import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Padrão Data Access Object (DAO).
- * Centraliza as operações de manipulação de dados (CRUD) isolando a lógica da interface gráfica.
- */
 public class ProdutoDAO {
-    // Coleção estática compartilhada em memória para persistência temporária antes do PostgreSQL
-    private static final List<Produto> BANCO_MEMORIA = new ArrayList<>();
-    // Gerador sequencial de IDs simulando a sequence serial do banco de dados relacional
-    private static int geradorId = 1;
 
-    // Bloco estático de inicialização: popula a base de testes assim que a classe é carregada na JVM
-    static {
-        BANCO_MEMORIA.add(new Produto(geradorId++, "Arroz Integral 1kg", "Tipo 1 grão longo", "Alimentos", new BigDecimal("6.50"), 80, "Ativo"));
-        BANCO_MEMORIA.add(new Produto(geradorId++, "Detergente Neutro 500ml", "Biodegradável", "Limpeza", new BigDecimal("2.30"), 150, "Ativo"));
-        BANCO_MEMORIA.add(new Produto(geradorId++, "Café Torrado 500g", "Extra forte", "Alimentos", new BigDecimal("16.90"), 40, "Ativo"));
-    }
-
-    // Operação Create (Inserir registro)
     public void inserir(Produto p) {
-        // Atribui o identificador único autoincrementado e adiciona à coleção
-        p.setCodigo(geradorId++);
-        BANCO_MEMORIA.add(p);
+        String sql = "INSERT INTO produto (nome, descricao, categoria, preco, quantidade, status) VALUES (?, ?, ?, ?, ?, ?)";
+        
+        try (Connection conn = ConexaoPostgres.getConexao();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             
+            stmt.setString(1, p.getNome());
+            stmt.setString(2, p.getDescricao());
+            stmt.setString(3, p.getCategoria());
+            stmt.setBigDecimal(4, p.getPreco());
+            stmt.setInt(5, p.getQuantidade());
+            stmt.setString(6, p.getStatus());
+            
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Erro ao salvar produto: " + e.getMessage(), e);
+        }
     }
 
-    // Operação Update (Alterar registro)
     public void alterar(Produto p) {
-        // Varre a lista em busca do registro com o mesmo código identificador
-        for (int i = 0; i < BANCO_MEMORIA.size(); i++) {
-            if (BANCO_MEMORIA.get(i).getCodigo().equals(p.getCodigo())) {
-                // Substitui o objeto antigo pelo objeto atualizado na mesma posição
-                BANCO_MEMORIA.set(i, p);
-                return;
-            }
+        String sql = "UPDATE produto SET nome=?, descricao=?, categoria=?, preco=?, quantidade=?, status=? WHERE codigo=?";
+        
+        try (Connection conn = ConexaoPostgres.getConexao();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             
+            stmt.setString(1, p.getNome());
+            stmt.setString(2, p.getDescricao());
+            stmt.setString(3, p.getCategoria());
+            stmt.setBigDecimal(4, p.getPreco());
+            stmt.setInt(5, p.getQuantidade());
+            stmt.setString(6, p.getStatus());
+            stmt.setInt(7, p.getCodigo());
+            
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Erro ao atualizar produto: " + e.getMessage(), e);
         }
     }
 
-    // Operação Delete (Excluir registro)
     public void excluir(int codigo) {
-        // Remove da lista o elemento correspondente ao ID informado via predicado
-        BANCO_MEMORIA.removeIf(p -> p.getCodigo() == codigo);
+        String sql = "DELETE FROM produto WHERE codigo=?";
+        
+        try (Connection conn = ConexaoPostgres.getConexao();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             
+            stmt.setInt(1, codigo);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Erro ao deletar produto: " + e.getMessage(), e);
+        }
     }
 
-    // Operação Read (Consultar com filtros)
     public List<Produto> listarPorFiltro(String tipoFiltro, String valor) {
-        // Se o valor de busca for nulo/vazio ou a opção "Todos" estiver marcada, retorna a lista completa
-        if (valor == null || valor.trim().isEmpty() || "Todos".equalsIgnoreCase(tipoFiltro)) {
-            // Retorna uma nova instância para proteger a lista original contra efeitos colaterais
-            return new ArrayList<>(BANCO_MEMORIA);
-        }
+        List<Produto> produtos = new ArrayList<>();
+        String sql = "SELECT * FROM produto";
+        boolean temFiltro = valor != null && !valor.trim().isEmpty() && !"Todos".equalsIgnoreCase(tipoFiltro);
 
-        List<Produto> filtrados = new ArrayList<>();
-        String termo = valor.trim().toLowerCase();
-
-        // Itera sobre a base aplicando a filtragem conforme a coluna selecionada
-        for (Produto p : BANCO_MEMORIA) {
-            if ("Código".equalsIgnoreCase(tipoFiltro) && String.valueOf(p.getCodigo()).equals(termo)) {
-                filtrados.add(p);
-            } else if ("Nome".equalsIgnoreCase(tipoFiltro) && p.getNome().toLowerCase().contains(termo)) {
-                filtrados.add(p);
-            } else if ("Categoria".equalsIgnoreCase(tipoFiltro) && p.getCategoria().toLowerCase().contains(termo)) {
-                filtrados.add(p);
+        if (temFiltro) {
+            if ("Código".equalsIgnoreCase(tipoFiltro)) {
+                sql += " WHERE codigo = ?";
+            } else if ("Nome".equalsIgnoreCase(tipoFiltro)) {
+                sql += " WHERE LOWER(nome) LIKE ?";
+            } else if ("Categoria".equalsIgnoreCase(tipoFiltro)) {
+                sql += " WHERE LOWER(categoria) LIKE ?";
             }
         }
-        return filtrados;
+
+        try (Connection conn = ConexaoPostgres.getConexao();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            if (temFiltro) {
+                if ("Código".equalsIgnoreCase(tipoFiltro)) {
+                    stmt.setInt(1, Integer.parseInt(valor.trim()));
+                } else {
+                    stmt.setString(1, "%" + valor.trim().toLowerCase() + "%");
+                }
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Produto p = new Produto(
+                        rs.getInt("codigo"),
+                        rs.getString("nome"),
+                        rs.getString("descricao"),
+                        rs.getString("categoria"),
+                        rs.getBigDecimal("preco"),
+                        rs.getInt("quantidade"),
+                        rs.getString("status")
+                    );
+                    produtos.add(p);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Erro ao buscar produtos: " + e.getMessage(), e);
+        }
+        return produtos;
     }
 }
